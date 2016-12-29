@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2012-2015 the original author or authors.
+ * Copyright (C) 2012-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 
 package ninja.cache;
 
+import com.google.common.base.Supplier;
+import com.google.common.base.Suppliers;
 import ninja.utils.NinjaConstant;
 import ninja.utils.NinjaProperties;
 
@@ -25,84 +27,51 @@ import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.google.inject.Provider;
 import com.google.inject.Singleton;
+import ninja.utils.ImplFromPropertiesFactory;
+import org.slf4j.LoggerFactory;
 
 /**
- * A provider that determines which implementation to load as Cache based on 
- * the value of key {@link CacheConstant#CACHE_IMPLEMENTATION} in
- * {@link NinjaProperties} (aka application.conf).
+ * A provider that determines which implementation to load as a Cache based on 
+ * the value of a configuration key in {@link NinjaProperties} (aka application.conf).
+ * 
+ * The configured implementation is only resolved when its actually used vs.
+ * at application startup.
  * 
  * If this variable is set the instance for that class is 
  * instantiated and used as cache implementation.
  * 
  * If the variable is not set {@link CacheEhCacheImpl} is used by default.
- * 
- * 
- * @author ra
- *
  */
 @Singleton
 public class CacheProvider implements Provider<Cache> {
-
-    private final NinjaProperties ninjaProperties;
-    private final Injector injector;
-
-    private final Cache cache;
-    private final Logger logger;
-
+    static private final Logger logger = LoggerFactory.getLogger(CacheProvider.class);
+    
+    private final ImplFromPropertiesFactory<Cache> factory;
+    private final Supplier<Cache> supplier;
+    
     @Inject
-    public CacheProvider(
-                         Injector injector, 
-                         NinjaProperties ninjaProperties, 
-                         Logger logger) {
+    public CacheProvider(Injector injector, NinjaProperties ninjaProperties) {
+        this.factory = new ImplFromPropertiesFactory<>(
+            injector,
+            ninjaProperties,
+            NinjaConstant.CACHE_IMPLEMENTATION,
+            Cache.class,
+            "ninja.cache.CacheEhCacheImpl",
+            true,
+            logger);
         
-        this.ninjaProperties = ninjaProperties;
-        this.injector = injector;
-        this.logger = logger;
-        
-      
-        Class<? extends Cache> cacheClass = null;
-
-        String cacheImplClassName = ninjaProperties.get(NinjaConstant.CACHE_IMPLEMENTATION);
-        
-        if (cacheImplClassName != null) {
-            try {
-
-                Class<?> clazz = Class.forName(cacheImplClassName);
-                cacheClass = clazz.asSubclass(Cache.class);
-
-                logger.info("Using the {} as implementation for caching.",  cacheClass);
-
-            } catch (ClassNotFoundException e) {
-                
-                throw new RuntimeException(
-                        "Class defined in configuration " + NinjaConstant.CACHE_IMPLEMENTATION +
-                        "not found (" + cacheClass + ")", e);
-                
-            } catch (ClassCastException e) {
-                
-                throw new RuntimeException(
-                        "Class defined in configuration " 
-                                + NinjaConstant.CACHE_IMPLEMENTATION +
-                                "is not an instance of interface cache (" 
-                                + cacheClass + ")", e);
+        // lazy singleton
+        this.supplier = Suppliers.memoize(new Supplier<Cache>() {
+            @Override
+            public Cache get() {
+                return factory.create();
             }
-        }
-
-        if (cacheClass == null) {
-                // load default implementation
-                cacheClass = CacheEhCacheImpl.class;
-                logger.info("Using default eh cache implementation. ({}) ", cacheClass);
-            
-        }
-
-        cache = injector.getInstance(cacheClass);
-      
+        });
     }
 
     @Override
     public Cache get() {
-        // only called once => reference cached by guice...
-        return cache;
-        
+        return this.supplier.get();
     }
+    
 }

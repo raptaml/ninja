@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2012-2015 the original author or authors.
+ * Copyright (C) 2012-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -209,7 +209,13 @@ public interface NinjaConstant {
      * Database stuff and JPA
      */    
     /** run migrations on startup of application */
+    final String MIGRATION_ENGINE_IMPLEMENTATION = "migration.engine.implementation";
+    
+    /** run migrations on startup of application */
     final String NINJA_MIGRATION_RUN = "ninja.migration.run";
+    
+    /** boolean flag to determine if Flyway should drop the existing DB schema */
+    final String NINJA_MIGRATION_DROP_SCHEMA = "ninja.migration.drop";
     
     /** The name of the persistence unit to use */
     String PERSISTENCE_UNIT_NAME = "ninja.jpa.persistence_unit_name";

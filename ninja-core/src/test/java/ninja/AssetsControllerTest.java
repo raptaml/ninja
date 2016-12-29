@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2012-2015 the original author or authors.
+ * Copyright (C) 2012-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@ import ninja.utils.HttpCacheToolkit;
 import ninja.utils.MimeTypes;
 import ninja.utils.NinjaProperties;
 import ninja.utils.ResponseStreams;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.junit.Assert.assertThat;
 import org.junit.Before;
 
 import org.junit.Test;
@@ -133,6 +135,30 @@ public class AssetsControllerTest {
 
         renderable.render(contextRenderable, result);
 
+        verify(contextRenderable).finalizeHeadersWithoutFlashAndSessionCookie(resultCaptor.capture());
+        assertEquals(Results.notFound().getStatusCode(), resultCaptor.getValue().getStatusCode());
+    }
+
+    @Test
+    public void testServeStaticDirectory() throws Exception {
+        AssetsControllerHelper assetsControllerHelper = Mockito.mock(AssetsControllerHelper.class, Mockito.CALLS_REAL_METHODS);
+
+        assetsController = new AssetsController(
+                assetsControllerHelper,
+                httpCacheToolkit,
+                mimeTypes,
+                ninjaProperties);
+
+        when(contextRenderable.getRequestPath()).thenReturn("/");
+        Result result2 = assetsController.serveStatic();
+
+        Renderable renderable = (Renderable) result2.getRenderable();
+
+        Result result = Results.ok();
+
+        renderable.render(contextRenderable, result);
+
+        verify(assetsControllerHelper).isDirectoryURL(this.getClass().getResource("/assets/"));
         verify(contextRenderable).finalizeHeadersWithoutFlashAndSessionCookie(resultCaptor.capture());
         assertEquals(Results.notFound().getStatusCode(), resultCaptor.getValue().getStatusCode());
     }
@@ -328,10 +354,9 @@ public class AssetsControllerTest {
         // we mocked this one:
         assertEquals("mimetype", result.getContentType());
 
-        // make sure the content is okay but pay attention to system specific line separator
-        String sysLineSeparator = System.lineSeparator();
-        assertEquals("User-agent: *" + sysLineSeparator + "Disallow: /", byteArrayOutputStream.toString());
-
+        String content = byteArrayOutputStream.toString();
+        assertThat(content, containsString("User-agent: *"));
+        assertThat(content, containsString("Disallow: /"));
     }
     
     @Test

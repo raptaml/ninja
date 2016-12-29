@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2012-2015 the original author or authors.
+ * Copyright (C) 2012-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ import com.google.common.collect.Maps;
 
 public class NinjaTestBrowser {
     private final Logger LOG = LoggerFactory.getLogger(NinjaTestBrowser.class);
-    private DefaultHttpClient httpClient;
+    private final DefaultHttpClient httpClient;
 
     public NinjaTestBrowser() {
         httpClient = new DefaultHttpClient();
@@ -127,7 +127,7 @@ public class NinjaTestBrowser {
 
     public String makeRequest(String url, Map<String, String> headers) {
 
-        StringBuffer sb = new StringBuffer();
+        StringBuilder sb = new StringBuilder();
         BufferedReader br = null;
         try {
 
@@ -173,7 +173,7 @@ public class NinjaTestBrowser {
                                                     Map<String, String> headers,
                                                     Map<String, String> formParameters) {
 
-        StringBuffer sb = new StringBuffer();
+        StringBuilder sb = new StringBuilder();
         BufferedReader br = null;
         try {
 
@@ -187,7 +187,7 @@ public class NinjaTestBrowser {
             }
 
             // add form parameters:
-            List<BasicNameValuePair> formparams = new ArrayList<BasicNameValuePair>();
+            List<BasicNameValuePair> formparams = new ArrayList<>();
             if (formParameters != null) {
 
                 for (Entry<String, String> parameter : formParameters

@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2012-2015 the original author or authors.
+ * Copyright (C) 2012-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,20 +16,14 @@
 
 package ninja;
 
+import ninja.utils.MethodReference;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import ninja.utils.NinjaProperties;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import com.google.common.base.Optional;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
@@ -37,23 +31,20 @@ import com.google.inject.Inject;
 import com.google.inject.Injector;
 
 public class RouterImpl implements Router {
-
+    static private final Logger logger = LoggerFactory.getLogger(RouterImpl.class);
+    
     private final NinjaProperties ninjaProperties;
-
-    private final Logger logger = LoggerFactory.getLogger(RouterImpl.class);
-
     private final List<RouteBuilderImpl> allRouteBuilders = new ArrayList<>();
     private final Injector injector;
-
     private List<Route> routes;
-
+    // for fast reverse route lookups
+    private Map<MethodReference,Route> reverseRoutes;
     // This regex works for both {myParam} AND {myParam: .*} (with regex)
     private final String VARIABLE_PART_PATTERN_WITH_PLACEHOLDER = "\\{(%s)(:\\s([^}]*))?\\}"; 
 
     @Inject
-    public RouterImpl(
-            Injector injector,
-            NinjaProperties ninjaProperties) {
+    public RouterImpl(Injector injector,
+                      NinjaProperties ninjaProperties) {
         this.injector = injector;
         this.ninjaProperties = ninjaProperties;
     }
@@ -107,57 +98,77 @@ public class RouterImpl implements Router {
     }
 
     @Override
+    public String getReverseRoute(Class<?> controllerClass,
+            String controllerMethodName,
+            Map<String, Object> parameterMap) {
+        Optional<Map<String, Object>> parameterMapOptional
+                = Optional.fromNullable(parameterMap);
+
+        return getReverseRoute(
+                controllerClass, controllerMethodName,
+                parameterMapOptional);
+    }
+    
+    @Override
     public String getReverseRoute(
             Class<?> controllerClass,
             String controllerMethodName,
             Optional<Map<String, Object>> parameterMap) {
 
-        if (routes == null) {
-            throw new IllegalStateException(
-                    "Attempt to get route when routes not compiled");
-        }
-
-        Optional<Route> route
-                = getRouteForControllerClassAndMethod(
-                        controllerClass,
-                        controllerMethodName);
-
-        if (route.isPresent()) {
-
-            // The original url. Something like route/user/{id}/{email}/userDashboard/{name: .*}
-            String urlWithReplacedPlaceholders
-                    = replaceVariablePartsOfUrlWithValuesProvidedByUser(
-                            route.get().getUrl(),
-                            parameterMap);
-
-            String finalUrl = addContextPathToUrlIfAvailable(
-                    urlWithReplacedPlaceholders,
-                    ninjaProperties);
-
-            return finalUrl;
-
-        }
-        else {
-            logger.info(
-                    "Could not find any reverse route for the method {} of the Controller class {}",
-                    controllerMethodName, controllerClass.getSimpleName());
+        try {
+            ReverseRouter.Builder reverseRouteBuilder
+                = new ReverseRouter(ninjaProperties, this)
+                    .with(controllerClass, controllerMethodName);
+            
+            if (parameterMap.isPresent()) {
+                // pathOrQueryParams are not escaped with the deprecated method of creating
+                // reverse routes.  use ReverseRouter!
+                parameterMap.get().forEach((name, value) -> {
+                    // path or query param?
+                    if (reverseRouteBuilder.getRoute().getParameters().containsKey(name)) {
+                        reverseRouteBuilder.rawPathParam(name, value);
+                    } else {
+                        reverseRouteBuilder.rawQueryParam(name, value);
+                    }
+                });
+            }
+            
+            return reverseRouteBuilder.build();
+        } catch (IllegalArgumentException e) {
+            logger.error("Unable to cleanly build reverse route", e);
             return null;
         }
     }
-
+    
     @Override
-    public String getReverseRoute(Class<?> controllerClass,
-            String controllerMethodName,
-            Map<String, Object> parameterMap) {
-
-        Optional<Map<String, Object>> parameterMapOptional
-                = Optional.fromNullable(parameterMap);
-
+    public String getReverseRoute(MethodReference controllerMethodRef) {
         return getReverseRoute(
-                controllerClass,
-                controllerMethodName,
-                parameterMapOptional);
-
+            controllerMethodRef.getDeclaringClass(),
+            controllerMethodRef.getMethodName());
+    }
+    
+    @Override
+    public String getReverseRoute(MethodReference controllerMethodRef, Map<String, Object> parameterMap) {
+        return getReverseRoute(
+            controllerMethodRef.getDeclaringClass(),
+            controllerMethodRef.getMethodName(),
+            parameterMap);
+    }
+    
+    @Override
+    public String getReverseRoute(MethodReference controllerMethodRef, Object ... parameterMap) {
+        return getReverseRoute(
+            controllerMethodRef.getDeclaringClass(),
+            controllerMethodRef.getMethodName(),
+            parameterMap);
+    }
+    
+    @Override
+    public String getReverseRoute(MethodReference controllerMethodRef, Optional<Map<String, Object>> parameterMap) {
+        return getReverseRoute(
+            controllerMethodRef.getDeclaringClass(),
+            controllerMethodRef.getMethodName(),
+            parameterMap);
     }
 
     @Override
@@ -165,20 +176,39 @@ public class RouterImpl implements Router {
         if (routes != null) {
             throw new IllegalStateException("Routes already compiled");
         }
-        List<Route> routes = new ArrayList<>();
+        List<Route> routesLocal = new ArrayList<>();
+        
         for (RouteBuilderImpl routeBuilder : allRouteBuilders) {
-            routes.add(routeBuilder.buildRoute(injector));
+            routesLocal.add(routeBuilder.buildRoute(injector));
         }
-        this.routes = ImmutableList.copyOf(routes);
+        
+        this.routes = ImmutableList.copyOf(routesLocal);
+        
+        // compile reverse routes for O(1) lookups
+        this.reverseRoutes = new HashMap<>(this.routes.size());
+        
+        for (Route route : this.routes) {
+            // its possible this route is a Result instead of a controller method
+            if (route.getControllerClass() != null) {
+                MethodReference controllerMethodRef
+                    = new MethodReference(
+                        route.getControllerClass(),
+                        route.getControllerMethod().getName());
+                
+                if (this.reverseRoutes.containsKey(controllerMethodRef)) {
+                    // the first one wins with reverse routing so we ignore this route
+                } else {
+                    this.reverseRoutes.put(controllerMethodRef, route);
+                }
+            }
+        }
 
         logRoutes();
     }
 
     @Override
     public List<Route> getRoutes() {
-        if (routes == null) {
-            throw new IllegalStateException("Routes have not been compiled");
-        }
+        verifyRoutesCompiled();
         return routes;
     }
 
@@ -238,114 +268,29 @@ public class RouterImpl implements Router {
 
         return routeBuilder;
     }
+    
+    private void verifyRoutesCompiled() {
+        if (routes == null) {
+            throw new IllegalStateException(
+                "Routes not compiled!");
+        }
+    }
 
-    private Optional<Route> getRouteForControllerClassAndMethod(
+    @Override
+    public Optional<Route> getRouteForControllerClassAndMethod(
             Class<?> controllerClass,
             String controllerMethodName) {
 
-        for (Route route : routes) {
+        verifyRoutesCompiled();
 
-            if (route.getControllerClass() != null
-                    && route.getControllerClass().equals(controllerClass)
-                    && route.getControllerMethod().getName().equals(controllerMethodName)) {
-
-                return Optional.of(route);
-
-            }
-
-        }
-
-        return Optional.absent();
-
+        MethodReference reverseRouteKey
+            = new MethodReference(controllerClass, controllerMethodName);
+        
+        Route route = this.reverseRoutes.get(reverseRouteKey);
+        
+        return Optional.fromNullable(route);
     }
-
-    private String replaceVariablePartsOfUrlWithValuesProvidedByUser(
-            String routeUrlWithVariableParts,
-            Optional<Map<String, Object>> parameterMap) {
-
-        String urlWithReplacedPlaceholders = routeUrlWithVariableParts;
-
-        if (parameterMap.isPresent()) {
-
-            Map<String, Object> queryParameterMap = new HashMap<>(parameterMap.get().size());
-
-            for (Entry<String, Object> parameterPair : parameterMap.get().entrySet()) {
-
-                boolean foundAsPathParameter = false;
-
-                StringBuffer stringBuffer = new StringBuffer();
-
-                String buffer = String.format(
-                        VARIABLE_PART_PATTERN_WITH_PLACEHOLDER,
-                        parameterPair.getKey());
-
-                Pattern PATTERN = Pattern.compile(buffer);
-                Matcher matcher = PATTERN.matcher(urlWithReplacedPlaceholders);
-
-                while (matcher.find()) {
-
-                    String resultingRegexReplacement = parameterPair.getValue().toString();
-
-                    matcher.appendReplacement(stringBuffer, resultingRegexReplacement);
-
-                    foundAsPathParameter = true;
-                }
-
-                matcher.appendTail(stringBuffer);
-                urlWithReplacedPlaceholders = stringBuffer.toString();
-
-                if (!foundAsPathParameter) {
-
-                    queryParameterMap.put(parameterPair.getKey(), parameterPair.getValue());
-
-                }
-
-            }
-
-            // now prepare the query string for this url if we got some query params
-            if (queryParameterMap.size() > 0) {
-
-                StringBuffer queryParameterStringBuffer = new StringBuffer();
-
-                // The uri is now replaced => we now have to add potential query parameters
-                for (Iterator<Entry<String, Object>> iterator = queryParameterMap.entrySet().iterator();
-                        iterator.hasNext();) {
-
-                    Entry<String, Object> queryParameterEntry = iterator.next();
-                    queryParameterStringBuffer.append(queryParameterEntry.getKey());
-                    queryParameterStringBuffer.append("=");
-                    queryParameterStringBuffer.append(queryParameterEntry.getValue());
-
-                    if (iterator.hasNext()) {
-                        queryParameterStringBuffer.append("&");
-                    }
-
-                }
-
-                urlWithReplacedPlaceholders = urlWithReplacedPlaceholders
-                        + "?"
-                        + queryParameterStringBuffer.toString();
-
-            }
-
-        }
-
-        return urlWithReplacedPlaceholders;
-    }
-
-    private String addContextPathToUrlIfAvailable(
-            String routeWithoutContextPath,
-            NinjaProperties ninjaProperties) {
-
-
-
-        // contextPath can only be empty. never null.
-        return ninjaProperties.getContextPath()
-                    + routeWithoutContextPath;
-
-
-    }
-
+    
     private void logRoutes() {
         // determine the width of the columns
         int maxMethodLen = 0;

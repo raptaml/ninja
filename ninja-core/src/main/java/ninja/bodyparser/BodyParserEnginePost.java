@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2012-2015 the original author or authors.
+ * Copyright (C) 2012-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,17 +19,22 @@ package ninja.bodyparser;
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
 import java.util.Collection;
-import java.util.Map.Entry;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import ninja.ContentTypes;
 import ninja.Context;
-import ninja.utils.SwissKnife;
+import ninja.params.ParamParser;
+import ninja.params.ParamParsers;
+import ninja.params.ParamParsers.ArrayParamParser;
+import ninja.params.ParamParsers.ListParamParser;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.Sets;
+import com.google.inject.Inject;
 import com.google.inject.Singleton;
 
 @Singleton
@@ -37,8 +42,23 @@ public class BodyParserEnginePost implements BodyParserEngine {
 
     private final Logger logger = LoggerFactory.getLogger(BodyParserEnginePost.class);
 
+    private final ParamParsers paramParsers;
+
+    @Inject
+    public BodyParserEnginePost(ParamParsers paramParsers) {
+        this.paramParsers = paramParsers;
+    }
+    
     @Override
     public <T> T invoke(Context context, Class<T> classOfT) {
+        // Grab parameters from context only once for efficiency
+        Map<String, String[]> parameters = context.getParameters();
+        
+        return invoke(context, parameters, classOfT, "");
+    }
+    
+    // Allows to instantiate inner objects with a prefix for each parameter key
+    private <T> T invoke(Context context, Map<String, String[]> parameters, Class<T> classOfT, String paramPrefix) {
         
         T t = null;
 
@@ -49,50 +69,84 @@ public class BodyParserEnginePost implements BodyParserEngine {
             return null;
         }
 
-        Set<String> declaredFields = getAllDeclaredFieldsAsStringSet(classOfT);
+        for (String declaredField : getAllDeclaredFieldsAsStringSet(classOfT)) {
 
-        for (Entry<String, String[]> ent : context.getParameters().entrySet()) {
+            try {
 
-            if (declaredFields.contains(ent.getKey())) {
+                Field field = classOfT.getDeclaredField(declaredField);
+                Class<?> fieldType = field.getType();
+                field.setAccessible(true);
 
-                try {
+                if (parameters.containsKey(paramPrefix + declaredField)) {
+                    
+                    String[] values = parameters.get(paramPrefix + declaredField);
 
-                    Field field = classOfT.getDeclaredField(ent.getKey());
-                    Class<?> fieldType = field.getType();
-                    field.setAccessible(true);
+                    if (Collection.class.isAssignableFrom(fieldType) || List.class.isAssignableFrom(fieldType)) {
 
-                    String[] values = ent.getValue();
-                    Object convertedValue;
+                        ListParamParser<?> parser = (ListParamParser<?>) paramParsers.getListParser(getGenericType(field));
+                        if (parser == null) {
+                            logger.warn("No parser defined for a collection of type {}", getGenericType(field).getCanonicalName());
+                        } else {
+                            field.set(t, parser.parseParameter(field.getName(), values, context.getValidation()));
+                        }
 
-                    // convert the values based on the field type,
-                    // supported types are collections, arrays and boxed primities
-
-                    if (Collection.class.isAssignableFrom(fieldType)) {
-                        convertedValue = SwissKnife.convertCollection(values, getGenericType(field));
                     } else if (fieldType.isArray()) {
-                        convertedValue = SwissKnife.convertArray(values, fieldType.getComponentType());
+
+                        ArrayParamParser<?> parser = paramParsers.getArrayParser(fieldType);
+                        if (parser == null) {
+                            logger.warn("No parser defined for an array of type {}", fieldType.getComponentType().getCanonicalName());
+                        } else {
+                            field.set(t, parser.parseParameter(field.getName(), values, context.getValidation()));
+                        }
+
                     } else {
-                        convertedValue = SwissKnife.convert(values[0], fieldType);
+
+                        ParamParser<?> parser = (ParamParser<?>) paramParsers.getParamParser(fieldType);
+                        if (parser == null) {
+                            logger.warn("No parser defined for type {}", fieldType.getCanonicalName());
+                        } else {
+                            field.set(t, parser.parseParameter(field.getName(), values[0], context.getValidation()));
+                        }
+
                     }
 
-                    if (convertedValue != null) {
-                        field.set(t, convertedValue);
+                } else {
+                    
+                    // Check if we have one parameter key corresponding to one valued inner attribute of this object field
+                    for (String parameter : parameters.keySet()) {
+                        if(parameter.startsWith(paramPrefix + declaredField + ".")) {
+                            if(isEmptyParameter(parameters.get(parameter))) {
+                                field.set(t, invoke(context, parameters, fieldType, paramPrefix + declaredField + "."));
+                                break;
+                            }
+                        }
                     }
-
-                } catch (NoSuchFieldException 
-                        | SecurityException 
-                        | IllegalArgumentException 
-                        | IllegalAccessException e) {
-
-                    logger.warn(
-                            "Error parsing incoming Post request into class {}. Key {} and value {}.", 
-                            classOfT.getName(), ent.getKey(), ent.getValue(), e);
+                    
                 }
 
+            } catch (NoSuchFieldException 
+                    | SecurityException 
+                    | IllegalArgumentException 
+                    | IllegalAccessException e) {
+
+                logger.warn(
+                        "Error parsing incoming Post request into class {}. Key {} and value {}.", 
+                        classOfT.getName(), paramPrefix + declaredField, parameters.get(paramPrefix + declaredField), e);
             }
 
         }
         return t;
+    }
+    
+    private boolean isEmptyParameter(String[] parameterValues) {
+        if(parameterValues != null && parameterValues.length > 0) {
+            for(String parameterValue : parameterValues) {
+                if(parameterValue != null && !parameterValue.isEmpty()) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public String getContentType() {

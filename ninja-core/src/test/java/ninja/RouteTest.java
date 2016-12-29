@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2012-2015 the original author or authors.
+ * Copyright (C) 2012-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,6 +48,14 @@ public class RouteTest {
         assertThat(
                 Route.convertRawUriToRegex("/me/{id: \\d+}"),
                 CoreMatchers.equalTo("/me/(\\d+)"));
+
+        // check regex with groups, they should be converted to non-capturing groups
+        // people may want to have both "/users/mike" and "/mike" in one route
+        // https://github.com/ninjaframework/ninja/issues/497
+        assertThat(
+                Route.convertRawUriToRegex("(/users)?/{user}"),
+                CoreMatchers.equalTo("(?:/users)?/([^/]*)")
+        );
     }
     
 }

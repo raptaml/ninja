@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2012-2015 the original author or authors.
+ * Copyright (C) 2012-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ import java.io.IOException;
 import java.util.Map;
 
 import models.FormObject;
-import ninja.NinjaTest;
 
 import org.apache.http.HttpResponse;
 import org.apache.http.cookie.Cookie;
@@ -31,22 +30,49 @@ import org.junit.Test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
+import ninja.RecycledNinjaServerTester;
+import ninja.utils.NinjaTestBrowser;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.junit.Assert.assertThat;
+import org.junit.Before;
 
-public class ApplicationControllerTest extends NinjaTest {
+public class ApplicationControllerTest extends RecycledNinjaServerTester {
 
+    private NinjaTestBrowser ninjaTestBrowser;
+    
+    @Before
+    public void freshNinjaTestBrowser() {
+        this.ninjaTestBrowser = new NinjaTestBrowser();
+    }
+    
     @Test
     public void testThatRedirectWorks() {
-
         // Some empty headers for now...
         Map<String, String> headers = Maps.newHashMap();
 
         // /redirect will send a location: redirect in the headers
-        String result = ninjaTestBrowser.makeRequest(getServerAddress() + "/redirect", headers);
+        String result = ninjaTestBrowser.makeRequest(withBaseUrl("/redirect"), headers);
 
         // If the redirect has worked we must see the following text
         // from the index screen:
         assertTrue(result.contains("Integration Test"));
 
+    }
+    
+    @Test
+    public void lambdaAnonymous() {
+        // if lambda worked then we'd be redirected to index
+        String result = ninjaTestBrowser.makeRequest(withBaseUrl("/lambda_anonymous"));
+        
+        assertThat(result, containsString("Hi!"));
+    }
+    
+    @Test
+    public void lambdaAnonymousArgs() {
+        // if lambda worked then we'd be redirected to index
+        String result = ninjaTestBrowser.makeRequest(withBaseUrl("/lambda_anonymous_args?a=joe"));
+        
+        assertThat(result, containsString("Query: joe"));
     }
 
     @Test
@@ -59,7 +85,7 @@ public class ApplicationControllerTest extends NinjaTest {
 
         // /redirect will send a location: redirect in the headers
 
-        String result = ninjaTestBrowser.makeRequest(getServerAddress() + "htmlEscaping", headers);
+        String result = ninjaTestBrowser.makeRequest(withBaseUrl("/htmlEscaping"), headers);
 
         // If the redirect has worked we must see the following text
         // from the index screen:
@@ -75,7 +101,7 @@ public class ApplicationControllerTest extends NinjaTest {
 
         // redirect will send a location: redirect in the headers
         HttpResponse httpResponse =
-                ninjaTestBrowser.makeRequestAndGetResponse(getServerAddress() + "session", headers);
+                ninjaTestBrowser.makeRequestAndGetResponse(withBaseUrl("/session"), headers);
 
         // Test that cookies get transported to consumer:
         assertEquals(1, ninjaTestBrowser.getCookies().size());
@@ -100,14 +126,13 @@ public class ApplicationControllerTest extends NinjaTest {
 
         // do the request
         String response =
-                ninjaTestBrowser.makeRequest(getServerAddress()
-                        + "user/12345/john@example.com/userDashboard", headers);
+                ninjaTestBrowser.makeRequest(withBaseUrl("/user/12345/john@example.com/userDashboard"), headers);
 
         // And assert that stuff is visible on page:
-        assertTrue(response.contains("john@example.com"));
-        assertTrue(response.contains("12345"));
+        assertThat(response, containsString("john@example.com"));
+        assertThat(response, containsString("12345"));
         // Assert that reverse routing works:
-        assertTrue(response.contains("By the way... Reverse url of this rawUrl is: /user/12345/john@example.com/userDashboard"));
+        assertThat(response, containsString("By the way... Reverse url of this rawUrl is: /user/12345/john@example.com/userDashboard"));
 
     }
 
@@ -117,13 +142,12 @@ public class ApplicationControllerTest extends NinjaTest {
         Map<String, String> headers = Maps.newHashMap();
 
         String response =
-                ninjaTestBrowser.makeRequest(getServerAddress()
-                        + "validation?email=john@example.com");
+                ninjaTestBrowser.makeRequest(withBaseUrl("/validation?email=john@example.com"));
 
         // And assert that stuff is visible on page:
         assertEquals(response, "\"john@example.com\"");
 
-        response = ninjaTestBrowser.makeRequest(getServerAddress() + "validation");
+        response = ninjaTestBrowser.makeRequest(withBaseUrl("/validation"));
 
         // And assert that stuff is visible on page:
         assertEquals(
@@ -168,7 +192,7 @@ public class ApplicationControllerTest extends NinjaTest {
 
         String response =
                 ninjaTestBrowser.makePostRequestWithFormParameters(
-                        getServerAddress() + "/form",
+                        withBaseUrl("/form"),
                         headers,
                         formParameters);
         
@@ -207,7 +231,7 @@ public class ApplicationControllerTest extends NinjaTest {
     @Test
     public void testDirectObjectRenderingWorks() {
         String response =
-                ninjaTestBrowser.makeRequest(getServerAddress() + "/direct_rendering");
+                ninjaTestBrowser.makeRequest(withBaseUrl("/direct_rendering"));
         
         // And assert that object values are visible on page:
         assertTrue(response.contains("test_name"));
@@ -219,7 +243,7 @@ public class ApplicationControllerTest extends NinjaTest {
     public void testFlashSuccessWorks() {
 
         String response =
-                ninjaTestBrowser.makeRequest(getServerAddress() + "/flash_success");
+                ninjaTestBrowser.makeRequest(withBaseUrl("/flash_success"));
 
         // And assert that stuff is visible on page:
         assertTrue(response.contains("This is a flashed success - with placeholder: PLACEHOLDER"));
@@ -230,7 +254,7 @@ public class ApplicationControllerTest extends NinjaTest {
     public void testFlashErrorWorks() {
 
         String response =
-                ninjaTestBrowser.makeRequest(getServerAddress() + "/flash_error");
+                ninjaTestBrowser.makeRequest(withBaseUrl("/flash_error"));
 
         // And assert that stuff is visible on page:
         assertTrue(response.contains("This is a flashed error - with placeholder: PLACEHOLDER"));
@@ -241,7 +265,7 @@ public class ApplicationControllerTest extends NinjaTest {
     public void testFlashAnyWorks() {
 
         String response =
-                ninjaTestBrowser.makeRequest(getServerAddress() + "/flash_any");
+                ninjaTestBrowser.makeRequest(withBaseUrl("/flash_any"));
 
         // And assert that stuff is visible on page:
         assertTrue(response.contains("This is an arbitrary message as flash message - with placeholder: PLACEHOLDER"));
@@ -253,14 +277,14 @@ public class ApplicationControllerTest extends NinjaTest {
     public void testCachingWorks() {
 
         String response =
-                ninjaTestBrowser.makeRequest(getServerAddress() + "/test_caching");
+                ninjaTestBrowser.makeRequest(withBaseUrl("/test_caching"));
 
         // First request => no caching
         assertTrue(response.contains("No cache key set."));
         
         
         response =
-                ninjaTestBrowser.makeRequest(getServerAddress() + "/test_caching");
+                ninjaTestBrowser.makeRequest(withBaseUrl("/test_caching"));
 
         // Second request hits cache:
         assertTrue(response.contains("Cache key is: cacheKeyValue"));
@@ -270,14 +294,14 @@ public class ApplicationControllerTest extends NinjaTest {
     @Test
     public void testJsonPWorks() {
         String response =
-                ninjaTestBrowser.makeRequest(getServerAddress() + "/jsonp?callback=App.callback");
+                ninjaTestBrowser.makeRequest(withBaseUrl("/jsonp?callback=App.callback"));
         assertEquals("App.callback({\"object\":\"value\"})", response);
     }
     
     @Test
     public void testThatBadRequestWorks() {
         String response =
-                ninjaTestBrowser.makeRequest(getServerAddress() + "/bad_request");
+                ninjaTestBrowser.makeRequest(withBaseUrl("/bad_request"));
         assertTrue(response.contains("bad request"));
     }
     
@@ -285,7 +309,7 @@ public class ApplicationControllerTest extends NinjaTest {
     public void testThatReverseRoutingWorks() {
         
         String response =
-                ninjaTestBrowser.makeRequest(getServerAddress() + "/test_reverse_routing");
+                ninjaTestBrowser.makeRequest(withBaseUrl("/test_reverse_routing"));
     
         assertTrue(response.contains("<li>/user/100000/me@me.com/userDashboard</li>"));
         assertTrue(response.contains("<li>/assets/webjars/bootstrap/3.3.4/css/bootstrap.min.css</li>"));
@@ -296,7 +320,7 @@ public class ApplicationControllerTest extends NinjaTest {
     public void testGetContextPathWorks() {
         
         String response =
-                ninjaTestBrowser.makeRequest(getServerAddress() + "/test_get_context_path_works");
+                ninjaTestBrowser.makeRequest(withBaseUrl("/test_get_context_path_works"));
     
         // both should be blank. We make sure we don't get any strange "/" delimiters or so...
         assertTrue(response.contains("<li>ninjaProperties.getContextPath(): </li>"));
@@ -307,7 +331,7 @@ public class ApplicationControllerTest extends NinjaTest {
     public void test_that_freemarker_emits_400_when_template_not_found() {
         
         String response =
-                ninjaTestBrowser.makeRequest(getServerAddress() + "/test_that_freemarker_emits_400_when_template_not_found");
+                ninjaTestBrowser.makeRequest(withBaseUrl("/test_that_freemarker_emits_400_when_template_not_found"));
     
         // both should be blank. We make sure we don't get any strange "/" delimiters or so...
         assertTrue(response.contains("<title>400 - Bad Request.</title>"));

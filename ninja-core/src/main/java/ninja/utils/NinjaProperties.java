@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2012-2015 the original author or authors.
+ * Copyright (C) 2012-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -176,7 +176,7 @@ public interface NinjaProperties {
      * Returns context under which the application is currently running.
      * For instance on Java application servers it is common to use something like
      * http://www.myserver.com/myapplication/index.html - where myapplication
-     * would be set by the applcation server.
+     * would be set by the application server.
      * 
      * We need the context to generate for instance correct reversed routes.
      * 

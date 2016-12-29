@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2012-2015 the original author or authors.
+ * Copyright (C) 2012-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,7 @@
 
 package ninja.cache;
 
-import static org.junit.Assert.assertTrue;
-import ninja.Configuration;
+import ninja.BaseAndClassicModules;
 import ninja.lifecycle.LifecycleSupport;
 import ninja.utils.NinjaConstant;
 import ninja.utils.NinjaMode;
@@ -26,82 +25,82 @@ import ninja.utils.NinjaPropertiesImpl;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.slf4j.Logger;
 
 import com.google.inject.Guice;
 import com.google.inject.Injector;
-
+import javax.inject.Provider;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.CoreMatchers.sameInstance;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertThat;
 
 public class CacheProviderTest {
     
     @Rule
     public ExpectedException thrown = ExpectedException.none();
-    
 
     @Test
-    public void testEhCacheDefaulLoadingWorks() {
-
+    public void defaultImplementation() {
         NinjaPropertiesImpl ninjaProperties = new NinjaPropertiesImpl(NinjaMode.test);   
         
         ninjaProperties.setProperty(NinjaConstant.CACHE_IMPLEMENTATION, null);
         
-        Injector injector = Guice.createInjector(new Configuration(ninjaProperties), LifecycleSupport.getModule());
+        Injector injector = Guice.createInjector(new BaseAndClassicModules(ninjaProperties));
         
-        Logger logger = injector.getInstance(Logger.class);
+        CacheProvider cacheProvider = injector.getInstance(CacheProvider.class);
         
-        CacheProvider cacheProvider = new CacheProvider(
-                injector, 
-                ninjaProperties, 
-                logger);
-        
-        assertTrue(cacheProvider.get() instanceof CacheEhCacheImpl);
-         
+        assertThat(cacheProvider.get(), instanceOf(CacheEhCacheImpl.class));
     }
     
-    
     @Test
-    public void testMemcachedLoadingWorks() {
-
+    public void configuredImplementation() {
         NinjaPropertiesImpl ninjaProperties = new NinjaPropertiesImpl(NinjaMode.test);   
         
         ninjaProperties.setProperty(NinjaConstant.CACHE_IMPLEMENTATION, CacheMemcachedImpl.class.getName());
         // just a dummy to test that loading works
         ninjaProperties.setProperty(NinjaConstant.MEMCACHED_HOST, "127.0.0.1:1234");
         
-        Injector injector = Guice.createInjector(new Configuration(ninjaProperties), LifecycleSupport.getModule());
+        Injector injector = Guice.createInjector(new BaseAndClassicModules(ninjaProperties));
         
-        Logger logger = injector.getInstance(Logger.class);
+        Provider<Cache> cacheProvider = injector.getProvider(Cache.class);
         
-        CacheProvider cacheProvider = new CacheProvider(
-                injector, 
-                ninjaProperties, 
-                logger);
-        
-        assertTrue(cacheProvider.get() instanceof CacheMemcachedImpl);
-         
+        assertThat(cacheProvider.get(), instanceOf(CacheMemcachedImpl.class));
     }
     
-    
     @Test
-    public void testThatSettingWrongCacheImplementationYieldsException() {
-
+    public void missingImplementationThrowsExceptionOnUseNotCreate() {
         NinjaPropertiesImpl ninjaProperties = new NinjaPropertiesImpl(NinjaMode.test);   
         
         ninjaProperties.setProperty(NinjaConstant.CACHE_IMPLEMENTATION, "not_existing_implementation");
         
-        Injector injector = Guice.createInjector(new Configuration(ninjaProperties), LifecycleSupport.getModule());
+        Injector injector = Guice.createInjector(new BaseAndClassicModules(ninjaProperties));
         
-        Logger logger = injector.getInstance(Logger.class);
+        Provider<Cache> provider = injector.getProvider(Cache.class);
         
         // this will not work => we expect a runtime exception...
         thrown.expect(RuntimeException.class);
-        CacheProvider cacheProvider = new CacheProvider(
-                injector, 
-                ninjaProperties, 
-                logger);
+        Cache cache = injector.getInstance(Cache.class);
+    }
+    
+    @Test
+    public void verifySingletonProviderAndInstance() {
+        NinjaPropertiesImpl ninjaProperties = new NinjaPropertiesImpl(NinjaMode.test);   
         
-        cacheProvider.get();
+        ninjaProperties.setProperty(NinjaConstant.CACHE_IMPLEMENTATION, CacheMockImpl.class.getCanonicalName());
         
+        Injector injector = Guice.createInjector(new BaseAndClassicModules(ninjaProperties));
+
+        CacheProvider cacheProvider = injector.getInstance(CacheProvider.class);
+        
+        // cache provider should be a singleton
+        assertThat(cacheProvider, sameInstance(injector.getInstance(CacheProvider.class)));
+        assertThat(cacheProvider, sameInstance(injector.getInstance(CacheProvider.class)));
+        
+        Cache cache = cacheProvider.get();
+        
+        // cache should be a singleton
+        assertThat(cache, sameInstance(cacheProvider.get()));
+        assertThat(cache, sameInstance(injector.getInstance(Cache.class)));
     }
 
 }

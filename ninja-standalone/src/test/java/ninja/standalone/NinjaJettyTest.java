@@ -1,11 +1,11 @@
-/*
- * Copyright 2015 Joe Lauer, Fizzed, Inc.
+/**
+ * Copyright (C) 2012-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,127 +13,109 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package ninja.standalone;
 
+import com.github.kevinsawicki.http.HttpRequest;
 import com.google.inject.CreationException;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
-import ninja.utils.NinjaConstant;
 import ninja.utils.NinjaMode;
-import ninja.utils.NinjaProperties;
 import org.apache.commons.io.IOUtils;
-import org.junit.After;
+import org.eclipse.jetty.server.handler.ErrorHandler;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
-/**
- *
- * @author Joe Lauer (http://twitter.com/jjlauer)
- */
 public class NinjaJettyTest {
 
-    static int randomPort = StandaloneHelper.findAvailablePort(8081, 9000);
-    
-    @After
-    public void tearDown() {
-        // make sure the external conf property is removed after the test
-        System.clearProperty(NinjaProperties.NINJA_EXTERNAL_CONF);
-        System.clearProperty(NinjaConstant.MODE_KEY_NAME);
-    }
+    static int RANDOM_PORT = StandaloneHelper.findAvailablePort(8081, 9000);
     
     @Test
-    public void startAndShutdownWithDefaults() throws Exception {
-        // absolute minimal working version of application.conf
-        System.setProperty(NinjaProperties.NINJA_EXTERNAL_CONF, "conf/minimal.conf");
-        
-        NinjaJetty nj = new NinjaJetty();
-        // only way to make this test not rely on a port is to at least set the port
-        nj.setPort(randomPort);
+    public void minimal() throws Exception {
+        NinjaJetty standalone = new NinjaJetty()
+            .externalConfigurationPath("conf/jetty.minimal.conf")
+            .port(RANDOM_PORT);
         
         try {
-            assertEquals(new Integer(randomPort), nj.port);
-            assertNull(nj.host);
-            assertNull(nj.ninjaContextPath);
-            assertEquals(NinjaMode.prod, nj.ninjaMode);
+            assertThat(standalone.getPort(), is(RANDOM_PORT));
+            assertThat(standalone.getHost(), is(nullValue()));
+            assertThat(standalone.getContextPath(), is(nullValue()));
+            assertThat(standalone.getNinjaMode(), is(NinjaMode.prod));
             
-            nj.start();
+            standalone.start();
             
-            assertNotNull("http://localhost:" + randomPort, nj.ninjaProperties.get(NinjaConstant.serverName));
-            assertNotNull(nj.context);
-            assertNotNull(nj.ninjaServletListener);
-            assertTrue(nj.context.isAvailable());
-            assertTrue(nj.context.isStarted());
-            assertTrue(nj.server.isStarted());
+            assertThat(standalone.getServerUrls().get(0), is("http://localhost:" + RANDOM_PORT));
+            assertThat(standalone.contextHandler, is(not(nullValue())));
+            assertNotNull(standalone.ninjaServletListener);
+            assertThat(standalone.contextHandler.isAvailable(), is(true));
+            assertThat(standalone.contextHandler.isStarted(), is(true));
+            assertThat(standalone.jetty.isStarted(), is(true));
             
-            nj.shutdown();
+            standalone.shutdown();
             
-            assertTrue(nj.context.isStopped());
-            assertTrue(nj.server.isStopped());
-            
+            assertThat(standalone.contextHandler.isStopped(), is(true));
+            assertThat(standalone.jetty.isStopped(), is(true));
         } finally {
-            nj.shutdown();
+            standalone.shutdown();
         }
     }
     
     @Test
-    public void startAndShutdownWithEverythingConfigured() throws Exception {
-        // absolute minimal working version of application.conf
-        System.setProperty(NinjaProperties.NINJA_EXTERNAL_CONF, "conf/minimal.conf");
-        
-        NinjaJetty nj = new NinjaJetty();
-        nj.setPort(randomPort);
-        nj.setHost("localhost");
-        nj.setNinjaContextPath("mycontext");
-        nj.setNinjaMode(NinjaMode.test);
+    public void minimalWithContext() throws Exception {
+        NinjaJetty standalone = new NinjaJetty()
+            .externalConfigurationPath("conf/jetty.minimal.conf")
+            .ninjaMode(NinjaMode.test)
+            .port(RANDOM_PORT)
+            .host("localhost")
+            .contextPath("/mycontext");
         
         try {
-            assertEquals(new Integer(randomPort), nj.port);
-            assertEquals("localhost", nj.host);
-            assertEquals("mycontext", nj.ninjaContextPath);
-            assertEquals(NinjaMode.test, nj.ninjaMode);
+            standalone.start();
             
-            nj.start();
+            assertThat(standalone.getPort(), is(RANDOM_PORT));
+            assertThat(standalone.getHost(), is("localhost"));
+            assertThat(standalone.getContextPath(), is("/mycontext"));
+            assertThat(standalone.getNinjaMode(), is(NinjaMode.test));
             
-            assertNotNull("http://localhost:" + randomPort, nj.ninjaProperties.get(NinjaConstant.serverName));
-            assertTrue(nj.ninjaProperties.isTest());
-            assertEquals("mycontext", nj.context.getContextPath());
+            assertEquals("/mycontext", standalone.contextHandler.getContextPath());
             
-            assertNotNull(nj.context);
-            assertNotNull(nj.ninjaServletListener);
-            assertTrue(nj.context.isAvailable());
-            assertTrue(nj.context.isStarted());
-            assertTrue(nj.server.isStarted());
+            assertThat(standalone.getContextPath(), is(not(nullValue())));
+            assertThat(standalone.ninjaServletListener, is(not(nullValue())));
+            assertThat(standalone.contextHandler.isAvailable(), is(true));
+            assertThat(standalone.contextHandler.isStarted(), is(true));
+            assertThat(standalone.jetty.isStarted(), is(true));
             
-            nj.shutdown();
+            standalone.shutdown();
             
-            assertTrue(nj.context.isStopped());
-            assertTrue(nj.server.isStopped());
-            
+            assertThat(standalone.contextHandler.isStopped(), is(true));
+            assertThat(standalone.jetty.isStopped(), is(true));
         } finally {
-            nj.shutdown();
+            standalone.shutdown();
         }
     }
     
     @Test
     public void missingConfigurationThrowsException() throws Exception {
-        // bad configuration file will throw exception when creating
-        // NinjaPropertiesImpl
-        System.setProperty(NinjaProperties.NINJA_EXTERNAL_CONF, "conf/empty.conf");
-        
-        NinjaJetty nj = new NinjaJetty();
-        nj.setPort(randomPort);
+        NinjaJetty standalone = new NinjaJetty()
+            .externalConfigurationPath("conf/jetty.empty.conf")
+            .port(RANDOM_PORT);
         
         try {
-            nj.start();
+            standalone.start();
             fail("start() should have thrown exception");
-        } catch (RuntimeException e) {
-            // expected exception 
+        } catch (Exception e) {
+            assertThat(e.getMessage(), containsString("application.secret not set"));
         } finally {
-            // this helps make tests more resilent to failures
-            nj.shutdown();
+            standalone.shutdown();
         }
     }
     
@@ -141,145 +123,232 @@ public class NinjaJettyTest {
     public void missingLanguageThrowsInjectorException() throws Exception {
         // bad configuration file will throw exception when creating NinjaPropertiesImpl
         // that exception occurs in NinjaBootstrap during injector creation
-        System.setProperty(NinjaProperties.NINJA_EXTERNAL_CONF, "conf/missinglang.conf");
-        
-        NinjaJetty nj = new NinjaJetty();
-        nj.setPort(randomPort);
+        NinjaJetty standalone = new NinjaJetty()
+            .externalConfigurationPath("conf/jetty.missinglang.conf")
+            .port(RANDOM_PORT);
         
         try {
-            nj.start();
+            standalone.start();
             fail("start() should have thrown exception");
         } catch (CreationException e) {
-            // with the special setup of the servlet in standalone mode -- we
-            // request the injector exception to be logged and accessible -- and
-            // that is the exception we expect to the thrown from start()
+            assertThat(e.getMessage(), containsString("not retrieve application languages from ninjaProperties"));
         } finally {
-            // this helps make tests more resilent to failures
-            nj.shutdown();
+            standalone.shutdown();
         }
     }
     
-    @Test
-    public void systemPropertiesConfiguresNinjaJetty() throws Exception {
-        System.setProperty(NinjaProperties.NINJA_EXTERNAL_CONF, "conf/minimal.conf");
-        
-        // as though we called on command-line with following system properties
-        System.setProperty("ninja.mode", "test");
-        System.setProperty("ninja.port", randomPort+"");
-        System.setProperty("ninja.context", "mycontext");
-        System.setProperty("ninja.host", "localhost");
-        System.setProperty("ninja.idle.timeout", "60000");
-        
-        final NinjaJetty nj = new NinjaJetty();
-        try {
-            
-            // since run() method joins() the server -- it's now a blocking
-            // method and won't return -- we need to do that in another thread
-            Thread runThread = new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    nj.run(new String[0]); 
-                }
-            });
-            
-            try {
-                
-                runThread.start();
-                
-                long waitTill = System.currentTimeMillis() + 2000;
-                while ((nj.server == null || nj.server.isStarting()) && System.currentTimeMillis() <= waitTill) {
-                    Thread.sleep(200);
-                }
-                
-                assertNotNull(nj.server);
-                assertNotNull(nj.ninjaProperties);
-                assertNotNull("http://localhost:" + randomPort, nj.ninjaProperties.get(NinjaConstant.serverName));
-                assertEquals(60000, nj.idleTimeout);
-                assertTrue(nj.ninjaProperties.isTest());
-                assertEquals("mycontext", nj.context.getContextPath());
-                
-                assertNotNull(nj.context);
-                assertNotNull(nj.ninjaServletListener);
-                assertTrue(nj.context.isAvailable());
-                assertTrue(nj.context.isStarted());
-                assertTrue(nj.server.isStarted());
-                
-                nj.shutdown();
-            
-                assertTrue(nj.context.isStopped());
-                assertTrue(nj.server.isStopped());
-            
-            } finally {
-                
-                runThread.interrupt();
-                nj.shutdown();
-                
-            }
-            
-        } finally {
-            // this helps make tests more resilent to failures
-            nj.shutdown();
-        }
-    }
     
     @Test
-    public void startWithJettyConfiguration() throws Exception {
+    public void jettyConfiguration() throws Exception {
         // use test resource of "jetty.xml" but we need to swap into a new
         // random port and then write the file back out
-        URL jettyConfig = this.getClass().getResource("/conf/jetty.xml");
+        String jettyConfiguration = createJettyConfiguration("jetty.xml", RANDOM_PORT);
+        
+        NinjaJetty standalone = new NinjaJetty()
+            .externalConfigurationPath("conf/jetty.com.example.conf")
+            .jettyConfiguration(jettyConfiguration);
+        
+        try {
+            standalone.start();
+            
+            // port won't be correct b/c actually configured via jetty file
+            assertThat(standalone.ninjaServletListener, is(not(nullValue())));
+            assertThat(standalone.contextHandler.isAvailable(), is(true));
+            assertThat(standalone.contextHandler.isStarted(), is(true));
+            assertThat(standalone.jetty.isStarted(), is(true));
+            
+            String page = get("http://localhost:" + RANDOM_PORT + "/home");
+            
+            assertThat(page, containsString("Hello World!"));
+        } finally {
+            standalone.shutdown();
+        }
+    }
+    
+    
+    @Test
+    public void jettyConfigurationWithContext() throws Exception {
+        // use test resource of "jetty.xml" but we need to swap into a new
+        // random port and then write the file back out
+        String jettyConfiguration = createJettyConfiguration("jetty.xml", RANDOM_PORT);
+        
+        NinjaJetty standalone = new NinjaJetty()
+            .externalConfigurationPath("conf/jetty.com.example.conf")
+            .contextPath("/mycontext")
+            .jettyConfiguration(jettyConfiguration);
+        
+        try {
+            standalone.start();
+            
+            // port won't be correct b/c actually configured via jetty file
+            assertThat(standalone.ninjaServletListener, is(not(nullValue())));
+            assertThat(standalone.contextHandler.isAvailable(), is(true));
+            assertThat(standalone.contextHandler.isStarted(), is(true));
+            assertThat(standalone.jetty.isStarted(), is(true));
+            
+            String page;
+            
+            page = get("http://localhost:" + RANDOM_PORT + "/mycontext/home");
+            
+            assertThat(page, containsString("Hello World!"));
+            
+            
+            page = get("http://localhost:" + RANDOM_PORT + "/mycontext/context_path");
+            
+            // requestPath removes contextPath
+            assertThat(page, containsString("/mycontext"));
+            
+            
+            page = get("http://localhost:" + RANDOM_PORT + "/mycontext/request_path");
+            
+            // requestPath removes contextPath
+            assertThat(page, containsString("/request_path"));
+            
+            // is the port correct (otherwise logging will be wrong)
+            assertThat(standalone.getPort(), is(RANDOM_PORT)); 
+        } finally {
+            standalone.shutdown();
+        }
+    }
+    
+    static public String createJettyConfiguration(String confName, int port) throws Exception {
+        URL jettyConfig = NinjaJettyTest.class.getResource("/conf/" + confName);
         
         String jettyConfigString = IOUtils.toString(jettyConfig, "UTF-8");
         
         // replace port w/ random
         String jettyConfigStringReplaced
-                = jettyConfigString.replace("\"8080\"", "\"" + randomPort + "\"");
+                = jettyConfigString.replace("\"8080\"", "\"" + port + "\"");
         
         File jettyConfigFile = new File(jettyConfig.toURI());
         
         File resourceDir = jettyConfigFile.getParentFile();
         
-        File newJettyConfigFile = new File(resourceDir, "jetty-new.xml");
+        File newJettyConfigFile = new File(resourceDir, jettyConfigFile.getName() + "-" + port + ".xml");
         
         IOUtils.write(jettyConfigStringReplaced, new FileOutputStream(newJettyConfigFile));
         
-        // absolute minimal working version of application.conf
-        System.setProperty(NinjaProperties.NINJA_EXTERNAL_CONF, "conf/minimal.conf");
-        
-        NinjaJetty nj = new NinjaJetty();
-        nj.setJettyConfiguration("conf/jetty-new.xml");
-        
-        try {
-            nj.start();
-            
-            // confirm we started?
-            URL testUrl = new URL("http://localhost:" + randomPort + "/");
-            
-            URLConnection conn = testUrl.openConnection();
-            conn.setAllowUserInteraction(false);
-            conn.setConnectTimeout(3000);
-            conn.setReadTimeout(3000);
-            
-            try {
-                String testContents = IOUtils.toString(conn.getInputStream());
-            } catch (IOException e) {
-                // we expect a 500 error since no app really exists
-                assertTrue(e.getMessage().contains("500"));
-            }
-            
-            assertNotNull(nj.context);
-            assertNotNull(nj.ninjaServletListener);
-            assertTrue(nj.context.isAvailable());
-            assertTrue(nj.context.isStarted());
-            assertTrue(nj.server.isStarted());
-            
-            nj.shutdown();
-            
-            assertTrue(nj.context.isStopped());
-            assertTrue(nj.server.isStopped());
-            
-        } finally {
-            nj.shutdown();
+        return "conf/" + newJettyConfigFile.getName();
+    }
+    
+    static public String get(String url) throws Exception {
+        URL u = new URL(url);
+        URLConnection conn = u.openConnection();
+        conn.setAllowUserInteraction(false);
+        conn.setConnectTimeout(3000);
+        conn.setReadTimeout(3000);
+
+        try (InputStream is = conn.getInputStream()) {
+            return IOUtils.toString(conn.getInputStream());
         }
     }
     
+    @Test
+    public void ssl() throws Exception {
+        NinjaJetty standalone = new NinjaJetty()
+            .externalConfigurationPath("conf/jetty.minimal.conf")
+            .ninjaMode(NinjaMode.test)
+            .port(-1)
+            .sslPort(RANDOM_PORT);
+        
+        try {
+            standalone.start();
+            
+            assertThat(standalone.getPort(), is(-1));
+            assertThat(standalone.getHost(), is(nullValue()));
+            assertThat(standalone.getContextPath(), is(""));
+            assertThat(standalone.getNinjaMode(), is(NinjaMode.test));
+            assertThat(standalone.getSslPort(), is(RANDOM_PORT));
+            assertThat(standalone.getSslKeystoreUri(), is(new URI(Standalone.DEFAULT_DEV_NINJA_SSL_KEYSTORE_URI)));
+            assertThat(standalone.getSslKeystorePassword(), is(Standalone.DEFAULT_DEV_NINJA_SSL_KEYSTORE_PASSWORD));
+            assertThat(standalone.getSslTruststoreUri(), is(new URI(Standalone.DEFAULT_DEV_NINJA_SSL_TRUSTSTORE_URI)));
+            assertThat(standalone.getSslTruststorePassword(), is(Standalone.DEFAULT_DEV_NINJA_SSL_TRUSTSTORE_PASSWORD));
+
+            assertThat(standalone.getServerUrls().get(0), is("https://localhost:" + RANDOM_PORT));
+            assertThat(standalone.contextHandler, is(not(nullValue())));
+            assertNotNull(standalone.ninjaServletListener);
+            assertThat(standalone.contextHandler.isAvailable(), is(true));
+            assertThat(standalone.contextHandler.isStarted(), is(true));
+            assertThat(standalone.jetty.isStarted(), is(true));
+            
+            
+            
+            standalone.shutdown();
+            
+            assertThat(standalone.contextHandler.isStopped(), is(true));
+            assertThat(standalone.jetty.isStopped(), is(true));
+        } finally {
+            standalone.shutdown();
+        }
+    }
+    
+    @Test
+    public void sessionsAreNotSharedOnSingleResultInstances() throws Exception {
+        // this test is not really specific to jetty, but its easier to test here
+        NinjaJetty standalone = new NinjaJetty()
+            .externalConfigurationPath("conf/jetty.com.session.conf")
+            .port(RANDOM_PORT);
+        
+        try {
+            standalone.start();
+            
+            // establish session with a set-cookie header
+            HttpRequest client0 = 
+                HttpRequest.get(standalone.getBaseUrls().get(0) + "/getOrCreateSession");
+            
+            assertThat(client0.code(), is(200));
+            assertThat(client0.header("Set-Cookie"), is(not(nullValue())));
+            
+            // call redirect so its session is processed first time (triggers bug for issue #450)
+            HttpRequest client1 = 
+                HttpRequest.get(standalone.getBaseUrls().get(0) + "/badRoute")
+                    .header("Cookie", client0.header("Set-Cookie"))
+                    .followRedirects(false);
+            
+            assertThat(client1.code(), is(303));
+            assertThat(client1.header("Set-Cookie"), is(not(nullValue())));
+            
+            // call redirect with a mock new browser (no cookie header) -- we
+            // should not get a session value back
+            HttpRequest client2 = 
+                HttpRequest.get(standalone.getBaseUrls().get(0) + "/badRoute")
+                    .followRedirects(false);
+            
+            assertThat(client2.code(), is(303));
+            // if cookie is NOT null then someone elses cookie (from the previous
+            // request above) got assigned to us!
+            assertThat(client2.header("Set-Cookie"), is(nullValue()));
+            
+        } finally {
+            standalone.shutdown();
+        }
+    }
+    
+    @Test
+    public void directoryListingIsForbidden() throws Exception {
+        NinjaJetty standalone = new NinjaJetty()
+                .externalConfigurationPath("conf/jetty.minimal.conf")
+                .port(RANDOM_PORT);
+        try {
+            standalone.start();
+            String directoryLisingAllowed = standalone.contextHandler.getInitParameter("org.eclipse.jetty.servlet.Default.dirAllowed");
+            assertThat(directoryLisingAllowed, is("false"));
+        } finally {
+            standalone.shutdown();
+        }
+    }
+    
+    @Test
+    public void checkThatSilentErrorHandlerIsRegistered() throws Exception {
+        NinjaJetty standalone = new NinjaJetty()
+                .externalConfigurationPath("conf/jetty.minimal.conf")
+                .port(RANDOM_PORT);
+        try {
+            standalone.start();
+            ErrorHandler errorHandler = standalone.contextHandler.getErrorHandler();
+            assertThat(errorHandler, instanceOf(NinjaJetty.SilentErrorHandler.class));
+        } finally {
+            standalone.shutdown();
+        }
+    }
 }

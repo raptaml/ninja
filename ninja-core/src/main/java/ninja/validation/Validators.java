@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2012-2015 the original author or authors.
+ * Copyright (C) 2012-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -266,6 +266,41 @@ public class Validators {
         }
     }
 
+    public static class DateValidator implements Validator<String> {
+
+        private final IsDate isDate;
+
+        public DateValidator(IsDate aDate) {
+            this.isDate = aDate;
+        }
+
+        /**
+         * Validate the given value
+         *
+         * @param value   The value, may be null
+         * @param field   The name of the field being validated, if applicable
+         * @param context The Ninja request context
+         */
+        @Override
+        public void validate(String value, String field, Context context) {
+            if (value != null) {
+                try {
+                    Double.parseDouble(value);
+                } catch (NumberFormatException e) {
+                    context.getValidation().addFieldViolation(field, ConstraintViolation
+                            .createForFieldWithDefault(this.isDate.key(),
+                                    fieldKey(field, this.isDate.fieldKey()),
+                                    this.isDate.message(), value));
+                }
+            }
+        }
+
+        @Override
+        public Class<String> getValidatedType() {
+            return String.class;
+        }
+    }
+    
     public static class MatchesValidator implements Validator<String> {
 
         private final Matches matches;

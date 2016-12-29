@@ -27,13 +27,25 @@ This allows you to process a request, extract things
 - Long (long)
 - Float (float)
 - Double (double)
-- Enum *requires runtime class registration in your conf.Module*
+- Enum (any)
 - Arrays of all these types (e.g. String[], int[], Enum[])
 
-**NOTE:**
-Collections and generics are not supported for parameter injection.  Types
-must be explicitly declared and basic arrays must be used to ensure runtime
-type-safety.
+**NOTES:**
+Enums do not require anymore a registration in conf.Module. Values are 
+converted automatically, ignoring case. Collections and generics are not 
+supported for parameter injection. Types must be explicitly declared 
+and basic arrays must be used to ensure runtime type-safety.
+
+### Custom Parameter Types
+
+You can also add your own supported type to Ninja, or override and existing one, 
+simply by implementing the <code>ParamParser</code> interface and binding it 
+with Guice in your conf.Module <code>configure()</code> method:
+
+<pre class="prettyprint">
+Multibinder<ParamParser> parsersBinder = Multibinder.newSetBinder(binder(), ParamParser.class);
+parsersBinder.addBinding().to(MyParamParser.class);
+</pre>
  
 
 How to write an argument extractor
@@ -112,3 +124,21 @@ As you can see the interface of the argument extractor references
 and will return the object
 annotated initially by 
 <code>@LoggedInUser</code>. In our example this was <code>@LoggedInUser String loggedInUser</code>.
+
+### Note: Using dependency injection
+
+Currently, there is a bug that causes <code>@Inject</code> fields to not be injected if you use an empty constructor. The workaround is to create a constructor with an injected parameter, such as <code>Context context</code>.
+
+<pre class="prettyprint">
+public class LoggedInUserExtractor implements ArgumentExtractor&lt;String&gt; {
+
+    @Inject
+    public LoggedInUserExtractor(Context context) {}
+
+    @Inject
+    UserDao userDao;
+    
+    ...
+    
+}
+</pre>

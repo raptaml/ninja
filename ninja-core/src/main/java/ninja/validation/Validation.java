@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2012-2015 the original author or authors.
+ * Copyright (C) 2012-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -138,4 +138,12 @@ public interface Validation {
      */
     List<FieldViolation> getBeanViolations();
 
+    /**
+     * Get a complete list of bean violations for a specified field. This list DOES NOT contain
+     * general violations
+     * (use getGeneralViolations() instead).
+     * 
+     * @return A List of FieldViolation-objects
+     */
+    List<FieldViolation> getBeanViolations(String fieldName);
 }

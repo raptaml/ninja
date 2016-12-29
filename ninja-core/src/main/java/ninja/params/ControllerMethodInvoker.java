@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2012-2015 the original author or authors.
+ * Copyright (C) 2012-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,6 +39,7 @@ import com.google.inject.Injector;
  * @author James Roper
  */
 public class ControllerMethodInvoker {
+    
     private final Method method;
     private final ArgumentExtractor<?>[] argumentExtractors;
 
@@ -55,9 +56,7 @@ public class ControllerMethodInvoker {
         }
         try {
             return method.invoke(controller, arguments);
-        } catch (IllegalAccessException e) {
-            throw new RuntimeException(e);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalAccessException | IllegalArgumentException e) {
             throw new RuntimeException(e);
         } catch (InvocationTargetException e) {
             if (e.getCause() instanceof RuntimeException) {
@@ -67,12 +66,23 @@ public class ControllerMethodInvoker {
             }
         }
     }
-
-    public static ControllerMethodInvoker build(Method method, Injector injector) {
+    
+    /**
+     * Builds an invoker for a functional method.  Understands what parameters
+     * to inject and extract based on type and annotations.
+     * @param functionalMethod The method to be invoked
+     * @param implementationMethod The method to use for determining what
+     *      actual parameters and annotations to use for each argument.  Useful
+     *      when type/lambda erasure makes the functional interface not reliable
+     *      for reflecting.
+     * @param injector The guice injector
+     * @return An invoker
+     */
+    public static ControllerMethodInvoker build(Method functionalMethod, Method implementationMethod, Injector injector) {
         // get both the parameters...
-        final Class[] paramTypes = method.getParameterTypes();
+        final Class[] paramTypes = implementationMethod.getParameterTypes();
         // ... and all annotations for the parameters
-        final Annotation[][] paramAnnotations = method
+        final Annotation[][] paramAnnotations = implementationMethod
                 .getParameterAnnotations();
 
         ArgumentExtractor<?>[] argumentExtractors = new ArgumentExtractor<?>[paramTypes.length];
@@ -84,7 +94,7 @@ public class ControllerMethodInvoker {
                         injector);
             } catch (RoutingException e) {
                 throw new RoutingException("Error building argument extractor for parameter " + i +
-                        " in method " + method.getDeclaringClass().getName() + "." + method.getName() + "()", e);
+                        " in method " + implementationMethod.getDeclaringClass().getName() + "." + implementationMethod.getName() + "()", e);
             }
         }
 
@@ -94,7 +104,7 @@ public class ControllerMethodInvoker {
             if (argumentExtractors[i] == null) {
                 if (bodyAsFound > -1) {
                     throw new RoutingException("Only one parameter may be deserialised as the body "
-                            + method.getDeclaringClass().getName() + "." + method.getName() + "()\n"
+                            + implementationMethod.getDeclaringClass().getName() + "." + implementationMethod.getName() + "()\n"
                             + "Extracted parameter is type: " + paramTypes[bodyAsFound].getName() + "\n"
                             + "Extra parmeter is type: " + paramTypes[i].getName());
                 } else {
@@ -112,7 +122,7 @@ public class ControllerMethodInvoker {
                     argumentExtractors[i]);
         }
 
-        return new ControllerMethodInvoker(method, argumentExtractors);
+        return new ControllerMethodInvoker(functionalMethod, argumentExtractors);
     }
 
     private static ArgumentExtractor<?> getArgumentExtractor(Class<?> paramType,
@@ -158,8 +168,8 @@ public class ControllerMethodInvoker {
             Annotation[] annotations, Injector injector, ArgumentExtractor<?> extractor) {
         // We have validators that get applied before parsing, and validators
         // that get applied after parsing.
-        List<Validator<?>> preParseValidators = new ArrayList<Validator<?>>();
-        List<Validator<?>> postParseValidators = new ArrayList<Validator<?>>();
+        List<Validator<?>> preParseValidators = new ArrayList<>();
+        List<Validator<?>> postParseValidators = new ArrayList<>();
 
         Class<?> boxedParamType = paramType;
         if (paramType.isPrimitive()) {
@@ -200,7 +210,7 @@ public class ControllerMethodInvoker {
             if (extractor.getFieldName() != null) {
                 if (String.class.isAssignableFrom(extractor.getExtractedType())) {
                     // Look up a parser for a single-valued parameter
-                    ParamParser<?> parser = ParamParsers.getParamParser(paramType);
+                    ParamParser<?> parser = injector.getInstance(ParamParsers.class).getParamParser(paramType);
                     if (parser == null) {
                         throw new RoutingException("Can't find parameter parser for type "
                                 + extractor.getExtractedType() + " on field "
@@ -211,7 +221,7 @@ public class ControllerMethodInvoker {
                     }
                 } else if (String[].class.isAssignableFrom(extractor.getExtractedType())) {
                     // Look up a parser for a multi-valued parameter
-                    ArrayParamParser<?> parser = ParamParsers.getArrayParser(paramType);
+                    ArrayParamParser<?> parser = injector.getInstance(ParamParsers.class).getArrayParser(paramType);
                     if (parser == null) {
                         throw new RoutingException("Can't find parameter array parser for type "
                                 + extractor.getExtractedType() + " on field "

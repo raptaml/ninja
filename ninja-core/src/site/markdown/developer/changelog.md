@@ -1,10 +1,123 @@
-Versoin X.X.X
+Version 6.x.x
+=============
+ 
+ * 2016-12-19 New `ninja.ReverseRouter` for validated, URL-safe reverse routing using Java 8 lambda expressions in addition to legacy Class + method name references. (jjlauer)
+ * 2016-10-03 Remove `async-machine-beta` module (jjlauer)
+ * 2016-09-29 Route using Java 8 lambda expressions (jjlauer)
+ * 2016-09-20 Session signatures now explicitly use UTF-8 for String.getBytes (lishid)
+ * 2016-09-01 Bump to minimum requirement of Java 8 (jjlauer)
+ * 2016-09-01 jetty from 9.2.10.v20150310 to 9.3.11.v20160721
+ * 2016-09-01 guava from 18.0 to 19.0
+ * 2016-09-01 prettytime from 3.2.7.Final to 4.0.1
+
+Version 5.8.0
 =============
 
- * 2015-10-18 Added Session.setExpiryTime() to control session expiry (watsonmw)
+ * 2016-08-26 Final release supporting Java 7! Future development will target Java 8+
+ * 2016-08-26 jetty from 9.2.10.v20150310 to 9.2.18.v20160721
+ * 2016-08-26 slf4j from 1.7.13 to 1.7.21
+ * 2016-08-26 joda from 2.7 to 2.9.4
+ * 2016-08-26 jackson from 2.5.1 to 2.8.1
+ * 2016-08-26 commons-io from 2.4 to 2.5
+ * 2016-08-26 commons-lang3 from 3.3.2 to 3.4
+ * 2016-08-26 commons-email from 1.3.3 to 1.4
+ * 2016-08-26 flyway-core from 4.0 to 4.0.3
+ * 2016-08-26 zt-exec from 1.7 to 1.9
+ * 2016-08-25 Migration module can be configured to drop schema with `ninja.migration.drop` property (jfendler)
+ * 2016-07-24 Fix directory listing when the server running path contains whitespaces (mallowlabs)
+ * 2016-07-19 Fix for request body parsing of inner objects (jlannoy)
 
+Version 5.7.0
+=============
+
+ * 2016-07-08 Update of the encryption class (MTDdk)
+ * 2016-07-08 Security fix against DoS in Commons FileUpload (CVE-2016-3092) (suer)
+ * 2016-07-04 Fixed directory listing in AssetsController (mallowlabs)
+
+Version 5.6.0
+=============
+
+ * 2016-04-15 Documentation for Validation enhanced (jlannoy)
+ * 2016-04-15 SwissKnife converters replaced by usage of ParamParsers in BodyPostEngine (jlannoy)
+ * 2016-04-15 Support for enumeration value (registration deprecated), custom types parsing and POST objects parsing (jlannoy)
+ * 2016-04-08 Fixed issue #497. Capturing groups in route regex. (bazi).
+ * 2016-04-08 Fixed another glitch to improve Ninja usability in Google AppEngine Environment (ra).
+ * 2016-05-20 Tiny documentation improvement regarding configuration files (ra).
+
+
+Version 5.5.0
+=============
+
+ * 2016-03-06 Added silent error handle to NinjaJetty that does not print out stacktraces.
+              Directory listing by NinjaJetty disabled (ra).
+ * 2016-04-05 Improve Ninja usability in Google AppEngine Environment (ra).
+ * 2016-04-04 Flyway version bump to 4.0 (nate-kingsley).
+ * 2016-03-18 Improved javadoc of Cache interface (ra).
+
+
+Version 5.4.0
+=============
+
+ * 2016-02-29 New ninja.standalone.AutoStandalone class locates standalone to use based on
+              System property, then META-INF/services, then default value of Jetty (jjlauer)
+ * 2016-02-29 Reverse routing is now O(1) from O(N) by using a pre-calculated hashmap (jjlauer)
+ * 2016-02-28 More flexible Ninja guice configuration! Your `conf.Module` can optionally extend 
+              `ninja.conf.FrameworkModule` to skip Ninja's default guice bindings
+              for its "classic" stack of Freemarker, Jackson, Cache, etc. (jjlauer)
+ * 2016-02-28 New `ninja.conf.NinjaClassicModule` guice module to aid power users
+              with configuring the exact set of features they want to include. (jjlauer)
+ * 2016-02-28 Migration engine implementation is now configurable with property `migration.engine.implementation` (jjlauer)
+ * 2016-02-28 Ehcache dependency can now be safely excluded if not used (jjlauer)
+ * 2016-02-28 New `utils.ImplFromPropertiesFactory` to aid in loading your
+              implementations from NinjaProperties. (jjlauer)
+ * 2016-02-26 Removed ninja-core dependency on org.mindrot:bcrypt (it was unused) (jjlauer)
+ * 2016-02-25 New RecycledNinjaServerTester in ninja-test-utilities to speed up your unit tests (jjlauer)
+ * 2016-01-08 Fix Cookie domain is not set when clearing session #462
+
+Version 5.3.1
+=============
+
+ * 2016-01-29 Security: session and flash data save to Context instead of Result (jjlauer)
+ * 2016-01-16 Module.java of Ninja applications can now get NinjaProperties injected optionally. (jlannoy)
+ * 2015-12-01 Added more documentation about Freemarker templates. (jlannoy)
+
+Version 5.3.0
+=============
+
+ * 2016-01-11 Bump license headers to 2016 (ra) 
+ * 2015-12-15 Switch from to Travis CI (Cloudbees CI no longer available) (ra)
+ * 2015-12-21 Basic HTTPS support for Ninja standalone & SuperDevMode (jjlauer)
+
+Version 5.2.2
+=============
+
+ * 2015-11-21 Bump to slf4j 1.7.13 (ra)
+ * 2015-11-13 Fixed garbled parameters in multipart requests (mallowlabs)
+ * 2015-10-18 Added Session.setExpiryTime() to control session expiry (watsonmw)
  * 2015-10-18 OptionalBinder for ObjectMapper and XmlMapper, so that users can easily override
               the default types for both of them. (amit2103/jjlauer)
+ * 2015-10-09 Refactoring of ninja-servlet to extract non-servlet functionality
+              into ninja-core to enable reuse in future non-servlet environments. (jjlauer)
+    * ninja-servlet `ninja/servlet/NinjaBootstrap.java` split into ninja-core `ninja/Bootstrap.java` and
+      ninja-servlet `ninja/servlet/NinjaServletBootstrap.java`
+    * ninja-servlet `ninja/servlet/ContextImpl.java` split into ninja-core `ninja/utils/AbstractContext.java`
+      and ninja-servlet `ninja/servlet/NinjaServletContext.java`
+ * 2015-10-09 Refactoring of ninja-standalone to extract non-Jetty functionality
+              into ninja-core to enable reuse in future non-Jetty standalone implementations. (jjlauer)
+    * Much of the functionality in ninja-standalone `ninja/standalone/NinjaJetty.java` extracted to
+      ninja-core `ninja/standalone/AbstractStandalone.java`
+ * 2015-10-09 Standalone configuration properties can now be set in conf/application.conf
+              Supports ninja.host, ninja.port, ninja.context, and ninja.idle.timeout
+              The order of precedence is systemProperty > configProperty > defaultValue (jjlauer)
+ * 2015-10-09 New 'ninja.standalone.class' system property to control which concrete
+              standalone implementation is used by NinjaTestServer (jjlauer)
+ * 2015-10-09 ninja-maven-plugin support for 'jvmArgs' property to allow for any
+              properties to be passed thru to spawned Ninja JVM. (jjlauer)
+ * 2015-10-09 ninja-maven-plugin support for 'mainClass' property to override which
+              class is run by spawned Ninja JVM.
+ * 2015-10-09 ninja-maven-plugin deprecated 'contextPath' property in favor of new
+              'context' key to match what NinjaJetty has always used. (jjlauer)
+ * 2015-10-09 NinjaJetty has more polished logging messages on startup (jjlauer)
 
 Version 5.2.1
 =============

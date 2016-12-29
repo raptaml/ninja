@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2012-2015 the original author or authors.
+ * Copyright (C) 2012-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -30,6 +31,8 @@ import ninja.Context;
 import ninja.Cookie;
 import ninja.Result;
 import ninja.Route;
+import ninja.params.ParamParser;
+import ninja.params.ParamParsers;
 import ninja.session.FlashScope;
 import ninja.session.Session;
 import ninja.uploads.FileItem;
@@ -62,14 +65,15 @@ public class FakeContext implements Context {
     private String scheme;
     private FlashScope flashScope;
     private Session session;
-    private List<Cookie> addedCookies = new ArrayList<Cookie>();
-    private Map<String, String> cookieValues = new HashMap<String, String>();
-    private ListMultimap<String, String> params = ArrayListMultimap.create();
-    private Map<String, String> pathParams = new HashMap<String, String>();
-    private ListMultimap<String, String> headers = ArrayListMultimap.create();
-    private Map<String, Object> attributes = new HashMap<String, Object>();
+    private final List<Cookie> addedCookies = new ArrayList<>();
+    private final Map<String, String> cookieValues = new HashMap<>();
+    private final ListMultimap<String, String> params = ArrayListMultimap.create();
+    private final Map<String, String> pathParams = new HashMap<>();
+    private final ListMultimap<String, String> headers = ArrayListMultimap.create();
+    private final Map<String, Object> attributes = new HashMap<>();
     private Object body;
-    private Validation validation = new ValidationImpl();
+    private final Validation validation = new ValidationImpl();
+    private final ParamParsers paramParsers = new ParamParsers(new HashSet<ParamParser>());
 
     private String acceptContentType;
 
@@ -217,11 +221,8 @@ public class FakeContext implements Context {
 
     @Override
     public <T> T getParameterAs(String key, Class<T> clazz, T defaultValue) {
-        try {
-            return SwissKnife.convert(key, clazz);
-        } catch (Exception e) {
-            return defaultValue;
-        }
+        T value = (T) paramParsers.getParamParser(clazz).parseParameter(key, key, validation);
+        return validation.hasFieldViolation(key) ? defaultValue : value;
     }
 
     public FakeContext addPathParameter(String key, String value) {

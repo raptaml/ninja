@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2012-2015 the original author or authors.
+ * Copyright (C) 2012-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,9 +60,8 @@ public interface Session {
      * It basically serializes the session into the header of the response.
      * 
      * @param context The context from where to deduct a potentially existing session.
-     * @param result The result where to add the session.
      */
-	public void save(Context context, Result result);
+	public void save(Context context);
 
     /**
      * Puts key / value into the session. 

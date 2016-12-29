@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 the original author or authors.
+ * Copyright (C) 2012-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -35,6 +36,8 @@ import javax.servlet.http.HttpServletResponse;
 
 import ninja.Route;
 import ninja.bodyparser.BodyParserEngineManager;
+import ninja.params.ParamParser;
+import ninja.params.ParamParsers;
 import ninja.session.FlashScope;
 import ninja.session.Session;
 import ninja.uploads.FileItem;
@@ -94,7 +97,7 @@ public class MultipartContextImplMemoryTest {
     private NinjaProperties ninjaProperties;
 
     @Mock
-    private ContextImpl context;
+    private NinjaServletContext context;
 
     private String paramA = "paramA";
     private String paramB = "paramB";
@@ -135,14 +138,15 @@ public class MultipartContextImplMemoryTest {
             }
         });
 
-        context = new ContextImpl(
+        context = new NinjaServletContext(
                 bodyParserEngineManager,
                 flashCookie,
                 ninjaProperties,
                 resultHandler,
                 sessionCookie,
                 validation,
-                injector
+                injector,
+                new ParamParsers(new HashSet<ParamParser>())
          )
         {
             public FileItemIterator getFileItemIterator() {
@@ -281,7 +285,7 @@ public class MultipartContextImplMemoryTest {
 
         Class<ControllerImpl> controllerClass = ControllerImpl.class;
         Method controllerMethod = ControllerImpl.class.getMethod("method1");
-        Route route = new Route("GET", "/", controllerClass, controllerMethod, null);
+        Route route = new Route("GET", "/", controllerMethod, null);
         context.setRoute(route);
 
         Assert.assertEquals("test#1", context.getParameterAsFileItem(file1).getContentType());
@@ -293,7 +297,7 @@ public class MultipartContextImplMemoryTest {
 
         Class<ControllerImpl> controllerClass = ControllerImpl.class;
         Method controllerMethod = ControllerImpl.class.getMethod("method2");
-        Route route = new Route("GET", "/", controllerClass, controllerMethod, null);
+        Route route = new Route("GET", "/", controllerMethod, null);
         context.setRoute(route);
         
         context.init(servletContext, httpServletRequest, httpServletResponse);

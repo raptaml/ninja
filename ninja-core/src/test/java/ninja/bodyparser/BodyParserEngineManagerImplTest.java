@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2012-2015 the original author or authors.
+ * Copyright (C) 2012-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import ninja.Router;
 import ninja.RouterImpl;
 import ninja.i18n.Lang;
 import ninja.i18n.LangImpl;
+import ninja.params.ParamParser;
 import ninja.utils.LoggerProvider;
 import ninja.utils.NinjaMode;
 import ninja.utils.NinjaProperties;
@@ -38,6 +39,7 @@ import com.google.common.collect.Lists;
 import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
+import com.google.inject.multibindings.Multibinder;
 
 public class BodyParserEngineManagerImplTest {
 
@@ -60,8 +62,14 @@ public class BodyParserEngineManagerImplTest {
 
                 bind(Logger.class).toProvider(LoggerProvider.class);
                 bind(Lang.class).to(LangImpl.class);
+                
+                Multibinder.newSetBinder(binder(), ParamParser.class);
                 bind(Router.class).to(RouterImpl.class);
 
+                bind(BodyParserEnginePost.class);
+                bind(BodyParserEngineJson.class);
+                bind(BodyParserEngineXml.class);
+                
                 bind(NinjaProperties.class).toInstance(new NinjaPropertiesImpl(NinjaMode.test));
 
                 for (Class<?> clazz : toBind) {

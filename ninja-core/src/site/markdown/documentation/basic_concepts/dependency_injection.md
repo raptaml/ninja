@@ -27,7 +27,8 @@ Guice in Ninja
 By convention Ninja will look for a Java file at <code>conf/Module.java</code>.
 That module is a regular Guice module that will be automatically loaded when
 your application starts up. This file is 100% pure Guice and you can use
-all Guice goodies.
+all Guice goodies. If needed, the constructor of this module can take a 
+<code>NinjaProperties</code> object as argument, but it's not mandatory.
 
 
 An example
@@ -95,6 +96,48 @@ implementation. You can easily replace real service implementations with
 mocked service implementations when developing your application. And it also
 gives you the ability to run clean mocked tests using Mockito.
 
+Advanced configuration
+----------------------
+
+Ninja includes many default bindings in guice before your application module
+`conf.Module` is called.  These include bindings for base Ninja features like logging,
+lifecycle support, scheduler support, etc.  There are also bindings for "classic"
+Ninja features such as freemarker templates, jackson json/xml support, cache,
+postoffice, and JPA.
+
+You can exclude Ninja's "classic" bindings by extending your `conf.Module`
+from `ninja.conf.FrameworkModule` rather than `com.google.inject.AbstractModule`.
+This instructs Ninja to not load `ninja.conf.NinjaClassicModule` by default.
+You may find customizing `ninja.conf.NinjaClassicModule` useful in building the
+exact set of features you'd like, especially since it has a builder-syntax for
+enabling/disabling of feature sets.
+
+<pre class="prettyprint">
+package conf;
+
+import ninja.conf.FrameworkModule;
+import ninja.conf.NinjaClassicModule;
+import ninja.utils.NinjaProperties;
+
+public class Module extends FrameworkModule {
+
+    private final NinjaProperties ninjaProperties;
+
+    public Module(NinjaProperties ninjaProperties) {
+        this.ninjaProperties = ninjaProperties;
+    }
+    
+    @Override
+    protected void configure() {
+        // classic ninja stack but with no freemarker or xml
+        install(new NinjaClassicModule(ninjaProperties)
+            .freemarker(false)
+            .xml(false)
+        );
+    }
+
+}
+</pre>
 
 Conclusion
 ----------
